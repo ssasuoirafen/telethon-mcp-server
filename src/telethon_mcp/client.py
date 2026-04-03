@@ -35,9 +35,10 @@ class TelethonMcpClient:
         await self._client.disconnect()
 
     def _parse_id(self, identifier: str) -> int | str:
-        if identifier.isdigit():
+        try:
             return int(identifier)
-        return identifier
+        except ValueError:
+            return identifier
 
     def _format_ts(self, dt: datetime) -> str:
         if dt.tzinfo is not None:

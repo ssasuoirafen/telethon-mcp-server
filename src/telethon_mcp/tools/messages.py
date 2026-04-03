@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
@@ -18,7 +16,7 @@ class SendMessageInput(BaseModel):
 class ReadHistoryInput(BaseModel):
     identifier: str = Field(..., description="Username, phone number, or numeric Telegram ID")
     limit: int = Field(20, description="Number of messages to fetch (default 20)")
-    min_id: Optional[int] = Field(None, description="Only messages newer than this message ID")
+    min_id: int | None = Field(None, description="Only messages newer than this message ID")
 
 
 def register(mcp: FastMCP, client: TelethonMcpClient) -> None:

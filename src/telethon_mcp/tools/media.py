@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
@@ -13,20 +11,20 @@ from ..client import TelethonMcpClient, handle_error
 class DownloadMediaInput(BaseModel):
     identifier: str = Field(..., description="Chat identifier (username, phone, or ID)")
     message_id: int = Field(..., description="Message ID containing the media to download")
-    download_path: Optional[str] = Field(None, description="Absolute path to save file (default: temp directory)")
+    download_path: str | None = Field(None, description="Absolute path to save file (default: temp directory)")
 
 
 class SendMediaInput(BaseModel):
     identifier: str = Field(..., description="Chat identifier (username, phone, or ID)")
     file_path: str = Field(..., description="Absolute path to the local file to send")
-    caption: Optional[str] = Field(None, description="Optional caption text for the media")
+    caption: str | None = Field(None, description="Optional caption text for the media")
 
 
 def register(mcp: FastMCP, client: TelethonMcpClient) -> None:
 
     @mcp.tool(
         name="telegram_download_media",
-        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
     )
     async def download_media(params: DownloadMediaInput) -> str:
         """Download a photo or document from a specific message. Returns the local file path."""
