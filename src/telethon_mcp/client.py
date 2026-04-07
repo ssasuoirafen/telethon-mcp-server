@@ -10,6 +10,7 @@ from telethon import TelegramClient
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaPhoto,
+    MessageMediaWebPage,
     User,
     UserStatusLastMonth,
     UserStatusLastWeek,
@@ -74,15 +75,55 @@ class TelethonMcpClient:
             return "[Photo]"
         if isinstance(msg.media, MessageMediaDocument):
             name = None
+            is_voice = False
+            is_video_note = False
+            is_sticker = False
             if msg.document:
                 for attr in msg.document.attributes:
                     if hasattr(attr, "file_name"):
                         name = attr.file_name
+                    if hasattr(attr, "voice") and attr.voice:
+                        is_voice = True
+                    if hasattr(attr, "round_message") and attr.round_message:
+                        is_video_note = True
+                    if type(attr).__name__ == "DocumentAttributeSticker":
+                        is_sticker = True
+            if is_voice:
+                return "[Voice message]"
+            if is_video_note:
+                return "[Video message]"
+            if is_sticker:
+                alt = getattr(msg.document, "attributes", [])
+                emoji = ""
+                for attr in alt:
+                    if hasattr(attr, "alt"):
+                        emoji = attr.alt
                         break
+                return f"[Sticker {emoji}]" if emoji else "[Sticker]"
             return f"[Document: {name}]" if name else "[Document]"
+        if isinstance(msg.media, MessageMediaWebPage):
+            wp = msg.media.webpage
+            url = getattr(wp, "url", None) if wp else None
+            return f"[Link: {url}]" if url else ""
         if msg.media is not None:
             return f"[Media: {type(msg.media).__name__}]"
         return ""
+
+    def _fwd_tag(self, msg) -> str:
+        fwd = msg.fwd_from
+        if fwd is None:
+            return ""
+        if fwd.from_name:
+            return f"[Forwarded from {fwd.from_name}]"
+        if fwd.from_id:
+            type_name = type(fwd.from_id).__name__
+            peer_id = getattr(fwd.from_id, "user_id", None) or getattr(fwd.from_id, "channel_id", None) or getattr(fwd.from_id, "chat_id", None)
+            if type_name == "PeerChannel":
+                return f"[Forwarded from channel:{peer_id}]"
+            if type_name == "PeerUser":
+                return f"[Forwarded from user:{peer_id}]"
+            return f"[Forwarded from {type_name}:{peer_id}]"
+        return "[Forwarded]"
 
     async def resolve_entity(self, identifier: str) -> str:
         entity = await self._client.get_entity(self._parse_id(identifier))
@@ -141,13 +182,32 @@ class TelethonMcpClient:
             ts = self._format_ts(msg.date)
             text_parts = []
 
+            fwd_tag = self._fwd_tag(msg)
+            if fwd_tag:
+                text_parts.append(fwd_tag)
+
             media_tag = self._media_tag(msg)
             if media_tag:
                 text_parts.append(media_tag)
             if msg.text:
                 text_parts.append(msg.text)
 
-            content = " ".join(text_parts) if text_parts else "[empty message]"
+            if not text_parts:
+                # Debug: show raw message type for truly empty messages
+                cls_name = type(msg).__name__
+                attrs = []
+                if hasattr(msg, "action") and msg.action:
+                    attrs.append(f"action={type(msg.action).__name__}")
+                if hasattr(msg, "fwd_from") and msg.fwd_from:
+                    attrs.append("has_fwd_from")
+                if hasattr(msg, "media") and msg.media:
+                    attrs.append(f"media={type(msg.media).__name__}")
+                if hasattr(msg, "reply_markup") and msg.reply_markup:
+                    attrs.append("has_reply_markup")
+                debug = f" ({', '.join(attrs)})" if attrs else ""
+                content = f"[empty message: {cls_name}{debug}]"
+            else:
+                content = " ".join(text_parts)
             lines.append(f"**[{ts}] {sender} (id:{msg.id}):**")
             lines.append(content)
             lines.append("")
