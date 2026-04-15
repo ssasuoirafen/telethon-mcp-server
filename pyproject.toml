@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-telethon-mcp-server = "telethon_mcp.server:main"
+telethon-mcp = "telethon_mcp.server:main"
 telethon-mcp-auth = "telethon_mcp.auth:main"
 
 [build-system]

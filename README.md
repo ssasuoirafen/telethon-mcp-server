@@ -24,7 +24,7 @@ Requires a Telegram API application. Get `api_id` and `api_hash` from [my.telegr
   "mcpServers": {
     "telethon": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/ssasuoirafen/telethon-mcp-server", "telethon-mcp-server"],
+      "args": ["--from", "git+https://github.com/ssasuoirafen/telethon-mcp-server", "telethon-mcp"],
       "env": {
         "TELEGRAM_API_ID": "your-api-id",
         "TELEGRAM_API_HASH": "your-api-hash"
