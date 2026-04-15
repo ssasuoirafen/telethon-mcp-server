@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaPhoto,
@@ -25,15 +26,87 @@ class TelethonMcpClient:
         session_path = str(Path.home() / ".telethon-mcp-session")
         self._client = TelegramClient(session_path, api_id, api_hash)
         self._me: User | None = None
+        self._authorized: bool = False
+        self._pending_phone: str | None = None
+        self._phone_code_hash: str | None = None
 
     async def connect(self) -> None:
         await self._client.connect()
-        if not await self._client.is_user_authorized():
-            raise RuntimeError("Not authorized. Run: telethon-mcp-auth status")
-        self._me = await self._client.get_me()
+        await self._refresh_auth_state()
 
     async def disconnect(self) -> None:
         await self._client.disconnect()
+
+    async def _refresh_auth_state(self) -> None:
+        if await self._client.is_user_authorized():
+            self._authorized = True
+            self._me = await self._client.get_me()
+        else:
+            self._authorized = False
+            self._me = None
+
+    def is_authorized(self) -> bool:
+        return self._authorized
+
+    async def _ensure_authorized(self) -> None:
+        if not self._authorized:
+            raise RuntimeError(
+                "Not authorized. Call telegram_auth_start(phone) first, "
+                "or run `telethon-mcp-auth login` in a terminal."
+            )
+
+    def _me_label(self) -> str:
+        if self._me is None:
+            return "unknown"
+        if self._me.username:
+            return f"@{self._me.username}"
+        return self._me.first_name or f"User#{self._me.id}"
+
+    async def auth_status(self) -> str:
+        if self._authorized and self._me is not None:
+            return f"Authorized as {self._me_label()} (ID: {self._me.id})"
+        return "Not authorized. Use telegram_auth_start to log in."
+
+    async def auth_start(self, phone: str) -> str:
+        if self._authorized:
+            return f"Already authorized as {self._me_label()}."
+        result = await self._client.send_code_request(phone)
+        self._pending_phone = phone
+        self._phone_code_hash = result.phone_code_hash
+        return (
+            "Code sent to the Telegram app. "
+            "Ask the user for the code, then call telegram_auth_submit_code."
+        )
+
+    async def auth_submit_code(self, code: str) -> str:
+        if self._authorized:
+            return f"Already authorized as {self._me_label()}."
+        if not self._pending_phone or not self._phone_code_hash:
+            return "No pending auth. Call telegram_auth_start first."
+        try:
+            await self._client.sign_in(
+                self._pending_phone,
+                code,
+                phone_code_hash=self._phone_code_hash,
+            )
+        except SessionPasswordNeededError:
+            return (
+                "2FA password required. "
+                "Ask the user for the password, then call telegram_auth_submit_password."
+            )
+        await self._refresh_auth_state()
+        self._pending_phone = None
+        self._phone_code_hash = None
+        return f"Authorized as {self._me_label()} (ID: {self._me.id})"
+
+    async def auth_submit_password(self, password: str) -> str:
+        if self._authorized:
+            return f"Already authorized as {self._me_label()}."
+        await self._client.sign_in(password=password)
+        await self._refresh_auth_state()
+        self._pending_phone = None
+        self._phone_code_hash = None
+        return f"Authorized as {self._me_label()} (ID: {self._me.id})"
 
     def _parse_id(self, identifier: str) -> int | str:
         try:
@@ -126,6 +199,7 @@ class TelethonMcpClient:
         return "[Forwarded]"
 
     async def resolve_entity(self, identifier: str) -> str:
+        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         if not isinstance(entity, User):
             lines = [
@@ -148,6 +222,7 @@ class TelethonMcpClient:
         return "\n".join(lines)
 
     async def send_message(self, identifier: str, text: str) -> str:
+        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.send_message(entity, text)
         return (
@@ -159,6 +234,7 @@ class TelethonMcpClient:
     async def read_history(
         self, identifier: str, limit: int = 20, min_id: int | None = None,
     ) -> str:
+        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         kwargs: dict = {"limit": limit}
         if min_id is not None:
@@ -215,6 +291,7 @@ class TelethonMcpClient:
         return "\n".join(lines)
 
     async def list_dialogs(self, limit: int = 20) -> str:
+        await self._ensure_authorized()
         dialogs = await self._client.get_dialogs(limit=limit)
 
         if not dialogs:
@@ -237,6 +314,7 @@ class TelethonMcpClient:
     async def download_media(
         self, identifier: str, message_id: int, download_path: str | None = None,
     ) -> str:
+        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.get_messages(entity, ids=message_id)
 
@@ -255,6 +333,7 @@ class TelethonMcpClient:
     async def send_media(
         self, identifier: str, file_path: str, caption: str | None = None,
     ) -> str:
+        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.send_file(entity, file_path, caption=caption)
         return (

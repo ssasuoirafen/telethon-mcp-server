@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from .client import TelethonMcpClient
-from .tools import dialogs, entities, media, messages
+from .tools import auth, dialogs, entities, media, messages
 
 
 def _env_or_exit(name: str) -> str:
@@ -30,6 +30,12 @@ client = TelethonMcpClient(api_id, api_hash)
 @asynccontextmanager
 async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
     await client.connect()
+    if not client.is_authorized():
+        print(
+            "Warning: Telegram session not authorized. "
+            "Use telegram_auth_start tool or run `telethon-mcp-auth login`.",
+            file=sys.stderr,
+        )
     try:
         yield {}
     finally:
@@ -38,6 +44,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
 
 mcp = FastMCP("telethon-mcp", lifespan=lifespan)
 
+auth.register(mcp, client)
 entities.register(mcp, client)
 messages.register(mcp, client)
 dialogs.register(mcp, client)
