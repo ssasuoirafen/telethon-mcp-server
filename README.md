@@ -41,18 +41,17 @@ Requires a Telegram API application. Get `api_id` and `api_hash` from [my.telegr
 
 ### Authentication
 
-First-time auth is a two-phase flow via the `telethon-mcp-auth` CLI:
+First-time auth uses the interactive `telethon-mcp-auth` CLI (prompts for phone, login code, and optional 2FA password):
 
 ```bash
-# Request login code (sent to your Telegram account)
-uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth request-code
-
-# Sign in with the received code
-uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth sign-in --code 12345
+# Interactive login (prompts for phone, code, 2FA password)
+uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth
 
 # Verify session
 uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth status
 ```
+
+Alternatively, the same flow is exposed as MCP tools (`telegram_auth_start`, `telegram_auth_submit_code`, `telegram_auth_submit_password`) for completing auth directly from an MCP client.
 
 Session is stored at `~/.telethon-mcp-session`. Once authenticated, the MCP server picks up the session automatically.
 
