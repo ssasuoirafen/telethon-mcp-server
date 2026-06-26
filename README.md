@@ -6,6 +6,10 @@ Personal MCP server for Telegram via [Telethon](https://github.com/LonamiWebs/Te
 
 | Tool | Description |
 |------|-------------|
+| `telegram_auth_status` | Check current authorization status (logged-in user info or a hint to start auth) |
+| `telegram_auth_start` | Start login - sends a one-time code to the user's Telegram app |
+| `telegram_auth_submit_code` | Submit the login code received from Telegram |
+| `telegram_auth_submit_password` | Submit the 2FA cloud password to finish login (only if 2FA is enabled) |
 | `telegram_resolve_entity` | Resolve username, phone, or numeric ID to entity details |
 | `telegram_list_dialogs` | List recent dialogs (chats, channels, users) |
 | `telegram_send_message` | Send text message to a user, chat, or channel |
@@ -22,7 +26,7 @@ Requires a Telegram API application. Get `api_id` and `api_hash` from [my.telegr
 ```json
 {
   "mcpServers": {
-    "telethon": {
+    "telethon-mcp": {
       "command": "uvx",
       "args": ["--from", "git+https://github.com/ssasuoirafen/telethon-mcp-server", "telethon-mcp"],
       "env": {
