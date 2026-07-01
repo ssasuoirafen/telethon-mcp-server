@@ -18,3 +18,8 @@ dist/
 
 # Working artifacts
 .local/
+
+# AI tooling
+CLAUDE.local.md
+.claude/settings.local.json
+.mcp.json
