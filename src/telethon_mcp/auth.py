@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import getpass
-import os
 import sys
 from pathlib import Path
 
 from telethon import TelegramClient
 
-API_ID = int(os.environ.get("TELEGRAM_API_ID", "0"))
-API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+from .config import load_credentials
+
 SESSION_PATH = str(Path.home() / ".telethon-mcp-session")
 
 
-def _make_client() -> TelegramClient:
-    return TelegramClient(SESSION_PATH, API_ID, API_HASH)
+def _make_client(api_id: int, api_hash: str) -> TelegramClient:
+    return TelegramClient(SESSION_PATH, api_id, api_hash)
 
 
 def _me_label(me) -> str:
@@ -25,8 +24,8 @@ def _me_label(me) -> str:
     return me.first_name or f"User#{me.id}"
 
 
-async def _login() -> None:
-    client = _make_client()
+async def _login(api_id: int, api_hash: str) -> None:
+    client = _make_client(api_id, api_hash)
     try:
         await client.start(
             phone=lambda: input("Phone: ").strip(),
@@ -40,8 +39,8 @@ async def _login() -> None:
         await client.disconnect()
 
 
-async def _status() -> None:
-    client = _make_client()
+async def _status(api_id: int, api_hash: str) -> None:
+    client = _make_client(api_id, api_hash)
     await client.connect()
     try:
         if await client.is_user_authorized():
@@ -54,19 +53,19 @@ async def _status() -> None:
 
 
 def main() -> None:
-    if not API_ID or not API_HASH:
-        print("Missing env: TELEGRAM_API_ID, TELEGRAM_API_HASH", file=sys.stderr)
-        sys.exit(1)
-
     cmd = sys.argv[1] if len(sys.argv) > 1 else "login"
-
-    if cmd == "login":
-        asyncio.run(_login())
-    elif cmd == "status":
-        asyncio.run(_status())
-    else:
+    if cmd not in ("login", "status"):
         print("Usage: telethon-mcp-auth [login|status]", file=sys.stderr)
         sys.exit(1)
+
+    # Resolved after the subcommand check so a typo does not demand a valid
+    # environment first.
+    api_id, api_hash = load_credentials()
+
+    if cmd == "login":
+        asyncio.run(_login(api_id, api_hash))
+    else:
+        asyncio.run(_status(api_id, api_hash))
 
 
 if __name__ == "__main__":

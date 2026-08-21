@@ -36,6 +36,8 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 **Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. Session file at `~/.telethon-mcp-session` (hardcoded). `_ensure_authorized()` guard raises `RuntimeError` if session not authorized.
 
+**Credentials**: `src/telethon_mcp/config.py` - `load_credentials()` reads and validates `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`, or exits 1 with guidance. Shared by `server.py` and `auth.py` so both fail the same way. Never echoes the offending value: the usual mistake is pasting the api_hash into the api_id slot.
+
 **Auth CLI**: `src/telethon_mcp/auth.py` - standalone `telethon-mcp-auth` entry point for interactive login outside the MCP flow. Default: `login`; also `status`.
 
 **Tool modules**: `src/telethon_mcp/tools/` - each module exports `register(mcp, client)` with `@mcp.tool()` async functions.
@@ -52,7 +54,7 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 - **Session path hardcoded** at `~/.telethon-mcp-session` in `client.py`. Not overridable via env.
 - **Session schema migrates one-way** - Telethon rewrites `~/.telethon-mcp-session` in place when it bumps the schema (v7 -> v8 added a `tmp_auth_key` column). A session file touched by 1.44 can no longer be opened by 1.42, which dies with `ValueError: too many values to unpack (expected 5)`. Keep the dependency floor and `uv.lock` on the same Telethon, or `uv run` and `uvx` fight over the same file. An earlier version of this note blamed that row-shape error on Python 3.14's sqlite3; it was actually observed on 3.13.12, so the cause is Telethon's own migration. Whether 3.14 breaks separately has not been tested - the `<3.14` cap stays as a precaution, not as a diagnosed bug.
-- **Env vars validated at import** (top-level in `server.py`) - missing `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` exit the server immediately at startup with a clear stderr message. Like remnawave-mcp-server, this fails fast at import rather than deferring to the first tool call.
+- **Env vars validated at import** (top-level in `server.py`, via `config.load_credentials()`) - a missing or non-numeric `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` exits immediately with a clear stderr message. Like remnawave-mcp-server, this fails fast at import rather than deferring to the first tool call. The CLI resolves the same credentials in `main()` instead, so a mistyped subcommand does not first demand a valid environment.
 - **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools then raise `RuntimeError` via `_ensure_authorized()` until user runs auth flow.
 - **2FA is two-step at MCP level**: `telegram_auth_submit_code` detects `SessionPasswordNeededError` and returns a prompt for password; client must then call `telegram_auth_submit_password`.
 - **No logging configured** - errors surface only through `handle_error()` as tool return strings.
@@ -83,7 +85,7 @@ Remote install from git (see README for full example):
 ## Git
 
 - Single branch (`main`). CI (`.github/workflows/ci.yml`): `uv sync` + pytest + advisory ruff on push/PR
-- ruff + pytest in the dev group (`uv sync`); registration-count smoke test in `tests/` (`uv run pytest`). No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
+- ruff + pytest in the dev group (`uv sync`); tool-registration and credential-loading tests in `tests/` (`uv run pytest`). No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
 
 ## Conventions
 

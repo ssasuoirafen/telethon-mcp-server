@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -11,19 +10,12 @@ from importlib.metadata import PackageNotFoundError, version
 from mcp.server.mcpserver import MCPServer
 
 from .client import TelethonMcpClient
+from .config import load_credentials
 from .tools import auth, dialogs, entities, media, messages
 
-
-def _env_or_exit(name: str) -> str:
-    val = os.environ.get(name, "")
-    if not val:
-        print(f"Missing env: {name}", file=sys.stderr)
-        sys.exit(1)
-    return val
-
-
-api_id = int(_env_or_exit("TELEGRAM_API_ID"))
-api_hash = _env_or_exit("TELEGRAM_API_HASH")
+# Validated at import so a bad environment stops the server at startup rather
+# than surfacing as a failure on the first tool call.
+api_id, api_hash = load_credentials()
 
 client = TelethonMcpClient(api_id, api_hash)
 
