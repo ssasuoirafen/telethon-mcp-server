@@ -1,4 +1,4 @@
-"""Telethon MCP server - FastMCP with persistent Telethon client."""
+"""Telethon MCP server - MCPServer with persistent Telethon client."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError, version
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from .client import TelethonMcpClient
 from .tools import auth, dialogs, entities, media, messages
@@ -28,7 +29,7 @@ client = TelethonMcpClient(api_id, api_hash)
 
 
 @asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
+async def lifespan(server: MCPServer) -> AsyncIterator[dict]:
     await client.connect()
     if not client.is_authorized():
         print(
@@ -42,7 +43,14 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         await client.disconnect()
 
 
-mcp = FastMCP("telethon-mcp", lifespan=lifespan)
+try:
+    _VERSION = version("telethon-mcp-server")
+except PackageNotFoundError:  # running from a source tree without an install
+    _VERSION = "0.0.0+dev"
+
+# mcp 2.x defaults version to "" (1.x reported the SDK's own version), so set it
+# explicitly or clients see a blank version in serverInfo.
+mcp = MCPServer("telethon-mcp", version=_VERSION, lifespan=lifespan)
 
 auth.register(mcp, client)
 entities.register(mcp, client)

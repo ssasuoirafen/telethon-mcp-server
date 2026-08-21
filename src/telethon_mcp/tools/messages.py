@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, Field
 
 from ..client import TelethonMcpClient, handle_error
@@ -19,7 +19,7 @@ class ReadHistoryInput(BaseModel):
     min_id: int | None = Field(None, description="Only messages newer than this message ID")
 
 
-def register(mcp: FastMCP, client: TelethonMcpClient) -> None:
+def register(mcp: MCPServer, client: TelethonMcpClient) -> None:
 
     @mcp.tool(
         name="telegram_send_message",

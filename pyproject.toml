@@ -1,12 +1,15 @@
 [project]
 name = "telethon-mcp-server"
-version = "0.1.0"
+version = "0.1.1"
 description = "Personal MCP server for Telegram via Telethon"
 license = "MIT"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "telethon>=1.42",
-    "mcp[cli]>=1.6.0",
+    # Major bound is mandatory: mcp 2.0 renamed FastMCP to MCPServer and moved it
+    # from mcp.server.fastmcp to mcp.server.mcpserver. Without an upper bound the
+    # next major can break the import the same way - re-check the API before widening.
+    "mcp[cli]>=2.0.0,<3",
     "pydantic>=2.0.0",
 ]
 

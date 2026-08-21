@@ -1,8 +1,8 @@
 # Telethon MCP Server
 
-## Project Overview <!-- last reviewed: 2026-04-26 -->
+## Project Overview <!-- last reviewed: 2026-08-21 -->
 
-Personal MCP server for Telegram via Telethon (user account, not bot). Python 3.12+, capped below 3.14 (dev pinned to 3.13 via `.python-version`): Telethon 1.42's SQLiteSession breaks on Python 3.14's sqlite3 (6-column row) - lift the cap when Telethon ships a 3.14-compatible release. FastMCP (`mcp[cli]`), Telethon 1.42+, Pydantic 2.0+.
+Personal MCP server for Telegram via Telethon (user account, not bot). Python 3.12+, capped below 3.14 (dev pinned to 3.13 via `.python-version`): Telethon 1.42's SQLiteSession breaks on Python 3.14's sqlite3 (6-column row) - lift the cap when Telethon ships a 3.14-compatible release. MCPServer from `mcp[cli]` 2.x (pinned `>=2.0.0,<3` - mcp 2.0 renamed FastMCP to MCPServer and moved it to `mcp.server.mcpserver`), Telethon 1.42+, Pydantic 2.0+.
 
 Used by the `xray-vpn` project (see its `.mcp.json`) for admin notifications and user support via Telegram.
 
@@ -30,7 +30,7 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 ## Architecture
 
-**Entry point**: `src/telethon_mcp/server.py` - creates FastMCP instance, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
+**Entry point**: `src/telethon_mcp/server.py` - creates the `MCPServer` instance, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
 
 **Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. Session file at `~/.telethon-mcp-session` (hardcoded). `_ensure_authorized()` guard raises `RuntimeError` if session not authorized.
 

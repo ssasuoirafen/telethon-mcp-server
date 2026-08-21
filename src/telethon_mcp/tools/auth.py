@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, Field
 
 from ..client import TelethonMcpClient, handle_error
@@ -26,7 +26,7 @@ class AuthSubmitPasswordInput(BaseModel):
     )
 
 
-def register(mcp: FastMCP, client: TelethonMcpClient) -> None:
+def register(mcp: MCPServer, client: TelethonMcpClient) -> None:
 
     @mcp.tool(
         name="telegram_auth_status",
