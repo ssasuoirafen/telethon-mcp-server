@@ -13,6 +13,8 @@ Used by the `xray-vpn` project (see its `.mcp.json`) for admin notifications and
 uv sync
 
 # First-time login (interactive: phone, code, optional 2FA password)
+# Needs TELEGRAM_API_ID / TELEGRAM_API_HASH exported in the shell: the CLI runs
+# outside the MCP client, so the env block in .mcp.json never reaches it
 uv run telethon-mcp-auth login        # default subcommand
 uv run telethon-mcp-auth status       # check session
 

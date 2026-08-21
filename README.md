@@ -45,9 +45,14 @@ Requires a Telegram API application. Get `api_id` and `api_hash` from [my.telegr
 
 ### Authentication
 
-First-time auth uses the interactive `telethon-mcp-auth` CLI (prompts for phone, login code, and optional 2FA password):
+First-time auth uses the interactive `telethon-mcp-auth` CLI (prompts for phone, login code, and optional 2FA password).
+
+The CLI runs outside the MCP client, so it reads `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from the shell environment - the `env` block in `.mcp.json` never reaches it. Set both first:
 
 ```bash
+export TELEGRAM_API_ID=your-api-id
+export TELEGRAM_API_HASH=your-api-hash
+
 # Interactive login (prompts for phone, code, 2FA password)
 uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth
 
