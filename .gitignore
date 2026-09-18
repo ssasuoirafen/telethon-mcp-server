@@ -20,8 +20,8 @@ dist/
 .local/
 
 # AI tooling
-.claude/memory/
 .claude/worktrees/
 .claude/settings.local.json
 .mcp.json
+AGENTS.override.md
 CLAUDE.local.md
