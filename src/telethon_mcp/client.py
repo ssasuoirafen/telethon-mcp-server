@@ -109,6 +109,9 @@ class TelethonMcpClient:
         return f"Authorized as {self._me_label()} (ID: {self._me.id})"
 
     def _parse_id(self, identifier: str) -> int | str:
+        # int() accepts a leading sign, so "+79991234567" would become a user ID.
+        if identifier.startswith("+"):
+            return identifier
         try:
             return int(identifier)
         except ValueError:
