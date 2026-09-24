@@ -9,7 +9,14 @@ from ..client import TelethonMcpClient, handle_error
 
 
 class ResolveInput(BaseModel):
-    identifier: str = Field(..., description="Username, phone number, or numeric Telegram ID")
+    identifier: str = Field(
+        ...,
+        description=(
+            "@username, phone number with a leading + (e.g. +79991234567; found only among "
+            "this account's contacts), or numeric chat ID as shown by telegram_list_dialogs "
+            "(resolves only for chats this session has seen)"
+        ),
+    )
 
 
 def register(mcp: MCPServer, client: TelethonMcpClient) -> None:
