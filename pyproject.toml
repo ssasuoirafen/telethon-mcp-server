@@ -3,7 +3,7 @@ name = "telethon-mcp-server"
 version = "0.1.5"
 description = "Personal MCP server for Telegram via Telethon"
 license = "MIT"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     # Upper bound is mandatory: Telethon migrates the SQLite session schema in
     # place (v7 -> v8 added tmp_auth_key) and the migration is one-way, so an
