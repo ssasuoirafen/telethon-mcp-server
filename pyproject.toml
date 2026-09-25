@@ -9,7 +9,7 @@ dependencies = [
     # place (v7 -> v8 added tmp_auth_key) and the migration is one-way, so an
     # unpinned floor let dev (locked 1.42) and uvx (resolved 1.44) fight over the
     # same ~/.telethon-mcp-session file. Re-check the session schema before widening.
-    "telethon>=1.44,<2",
+    "telethon>=1.45,<2",
     # Major bound is mandatory: mcp 2.0 renamed FastMCP to MCPServer and moved it
     # from mcp.server.fastmcp to mcp.server.mcpserver. Without an upper bound the
     # next major can break the import the same way - re-check the API before widening.

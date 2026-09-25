@@ -2,7 +2,7 @@
 
 ## Project Overview <!-- last reviewed: 2026-08-21 -->
 
-Personal MCP server for Telegram via Telethon (user account, not bot). Python 3.12+, capped below 3.14 (dev pinned to 3.13 via `.python-version`) - the cap is precautionary and untested, see Known Quirks. MCPServer from `mcp[cli]` 2.x (pinned `>=2.0.0,<3` - mcp 2.0 renamed FastMCP to MCPServer and moved it to `mcp.server.mcpserver`), Telethon 1.44+ (pinned `>=1.44,<2` - the SQLite session schema migrates one-way), Pydantic 2.0+.
+Personal MCP server for Telegram via Telethon (user account, not bot). Python 3.12+, capped below 3.14 (dev pinned to 3.13 via `.python-version`) - the cap is precautionary and untested, see Known Quirks. MCPServer from `mcp[cli]` 2.x (pinned `>=2.0.0,<3` - mcp 2.0 renamed FastMCP to MCPServer and moved it to `mcp.server.mcpserver`), Telethon 1.45+ (pinned `>=1.45,<2` - the SQLite session schema migrates one-way), Pydantic 2.0+.
 
 Used by the `xray-vpn` project (see its `.mcp.json`) for admin notifications and user support via Telegram.
 
