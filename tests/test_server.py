@@ -6,8 +6,7 @@ Two import-time hazards in telethon_mcp.server are handled before importing it:
    values are set first.
 2. server.py instantiates TelethonMcpClient at module level, whose __init__ is
    NOT lazy: it constructs telethon.TelegramClient, which opens a SQLite session
-   file. We stub TelegramClient with a no-op so import does no I/O and no network
-   (and to dodge the Telethon 1.42 / Python 3.14 SQLiteSession row-unpack bug).
+   file. We stub TelegramClient with a no-op so import does no I/O and no network.
    The tool closures are never invoked here, so a stub client is sufficient - we
    only assert the registered tool surface.
 """
