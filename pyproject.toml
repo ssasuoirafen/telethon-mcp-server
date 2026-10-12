@@ -18,8 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-telethon-mcp = "telethon_mcp.server:main"
-telethon-mcp-auth = "telethon_mcp.auth:main"
+telethon-mcp = "telethon_mcp.cli:main"
 
 [build-system]
 requires = ["hatchling"]

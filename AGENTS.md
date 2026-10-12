@@ -12,13 +12,13 @@ Used by the `xray-vpn` project (see its `.mcp.json`) for admin notifications and
 # Install dependencies
 uv sync
 
-# First-time login (interactive: phone, code, optional 2FA password)
+# Login (interactive: phone, code, optional 2FA password)
 # Needs TELEGRAM_API_ID / TELEGRAM_API_HASH exported in the shell: the CLI runs
 # outside the MCP client, so the env block in .mcp.json never reaches it
-uv run telethon-mcp-auth login        # default subcommand
-uv run telethon-mcp-auth status       # check session
+uv run telethon-mcp login
+uv run telethon-mcp status            # check session
 
-# Run the server standalone
+# Run the server standalone (no subcommand)
 uv run telethon-mcp
 
 # Run via MCP inspector (for debugging)
@@ -32,19 +32,23 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 ## Architecture
 
-**Entry point**: `src/telethon_mcp/server.py` - creates the `MCPServer` instance, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
+**CLI**: `src/telethon_mcp/cli.py` - the `telethon-mcp` entry point. No subcommand runs the MCP server; `login` logs in interactively in the terminal (Telethon's `start()`: phone, code, 2FA password via `getpass`); `status` shows the authorized account.
 
-**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. Session file at `~/.telethon-mcp-session` (hardcoded). `_ensure_authorized()` guard raises `RuntimeError` if session not authorized.
+**Server**: `src/telethon_mcp/server.py` - creates the `MCPServer` instance with `instructions`, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
 
-**Credentials**: `src/telethon_mcp/config.py` - `load_credentials()` reads and validates `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`, or exits 1 with guidance. Shared by `server.py` and `auth.py` so both fail the same way. Never echoes the offending value: the usual mistake is pasting the api_hash into the api_id slot.
+**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. `open_telegram_client()` opens the session file at `SESSION_PATH` for both the server and the CLI. `_ensure_authorized()` guard raises `RuntimeError(NOT_AUTHORIZED)` if the session is not authorized.
 
-**Auth CLI**: `src/telethon_mcp/auth.py` - standalone `telethon-mcp-auth` entry point for interactive login outside the MCP flow. Default: `login`; also `status`.
+**Credentials**: `src/telethon_mcp/config.py` - `load_credentials()` reads and validates `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`, or exits 1 with guidance. Shared by `server.py` and `cli.py` so both fail the same way. Never echoes the offending value: the usual mistake is pasting the api_hash into the api_id slot.
 
 **Tool modules**: `src/telethon_mcp/tools/` - each module exports `register(mcp, client)` with `@mcp.tool()` async functions.
 
+### Login
+
+- No login tools: the only way in is `telethon-mcp login` in a terminal (the command that starts the server, with `login` appended). The agent never relays a login code or the 2FA password
+- `NOT_AUTHORIZED` (`client.py`) tells the agent to ask the user to run that command; the server instructions key off its "Not authorized" prefix
+
 ### Tool modules
 
-- `auth.py` - `telegram_auth_status`, `telegram_auth_start`, `telegram_auth_submit_code`, `telegram_auth_submit_password`
 - `entities.py` - `telegram_resolve_entity`
 - `messages.py` - `telegram_send_message`, `telegram_read_history`
 - `dialogs.py` - `telegram_list_dialogs`
@@ -52,11 +56,10 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 ## Known Quirks
 
-- **Session path hardcoded** at `~/.telethon-mcp-session` in `client.py`. Not overridable via env.
-- **Session schema migrates one-way** - Telethon rewrites `~/.telethon-mcp-session` in place when it bumps the schema (v7 -> v8 added a `tmp_auth_key` column). A session file touched by 1.44 can no longer be opened by 1.42, which dies with `ValueError: too many values to unpack (expected 5)`. Keep the dependency floor and `uv.lock` on the same Telethon, or `uv run` and `uvx` fight over the same file. That error was observed on Python 3.13.12, so it comes from Telethon's migration, not from Python 3.14's sqlite3. Python 3.14 was later checked on its own (tests plus an offline session round-trip) and showed no problem, so the precautionary `<3.14` cap was dropped.
-- **Env vars validated at import** (top-level in `server.py`, via `config.load_credentials()`) - a missing or non-numeric `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` exits immediately with a clear stderr message. Like remnawave-mcp-server, this fails fast at import rather than deferring to the first tool call. The CLI resolves the same credentials in `main()` instead, so a mistyped subcommand does not first demand a valid environment.
-- **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools then raise `RuntimeError` via `_ensure_authorized()` until user runs auth flow.
-- **2FA is two-step at MCP level**: `telegram_auth_submit_code` detects `SessionPasswordNeededError` and returns a prompt for password; client must then call `telegram_auth_submit_password`.
+- **Session path hardcoded** as `SESSION_PATH` in `client.py`. Not overridable via env. Telethon appends `.session`, so the file on disk is `~/.telethon-mcp-session.session`; delete it to force a fresh login.
+- **Session schema migrates one-way** - Telethon rewrites the session file in place when it bumps the schema (v7 -> v8 added a `tmp_auth_key` column). A session file touched by 1.44 can no longer be opened by 1.42, which dies with `ValueError: too many values to unpack (expected 5)`. Keep the dependency floor and `uv.lock` on the same Telethon, or `uv run` and `uvx` fight over the same file. That error was observed on Python 3.13.12, so it comes from Telethon's migration, not from Python 3.14's sqlite3. Python 3.14 was later checked on its own (tests plus an offline session round-trip) and showed no problem, so the precautionary `<3.14` cap was dropped.
+- **Env vars validated at import** (top-level in `server.py`, via `config.load_credentials()`) - a missing or non-numeric `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` exits immediately with a clear stderr message. Like remnawave-mcp-server, this fails fast at import rather than deferring to the first tool call. `cli.main()` parses the arguments first and imports `server.py` only when no subcommand is given, so `--help` or a mistyped subcommand does not first demand a valid environment.
+- **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools then raise `RuntimeError` via `_ensure_authorized()` until the user runs `telethon-mcp login` and the server is restarted.
 - **No logging configured** - errors surface only through `handle_error()` as tool return strings.
 - **Flood-wait errors from Telegram** are not retried/backed off - propagate to tool return as raw error strings.
 
@@ -85,7 +88,7 @@ Remote install from git (see README for full example):
 ## Git
 
 - Single branch (`main`). CI (`.github/workflows/ci.yml`): `uv sync` + pytest + advisory ruff on push/PR
-- ruff + pytest in the dev group (`uv sync`); tool-registration and credential-loading tests in `tests/` (`uv run pytest`). No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
+- ruff + pytest in the dev group (`uv sync`); tests in `tests/` (`uv run pytest`) cover tool registration, credential loading, the CLI and the client's authorization handling, with a fake `TelegramClient` from `conftest.py` instead of the network. No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
 
 ## Conventions
 

@@ -11,7 +11,7 @@ from mcp.server.mcpserver import MCPServer
 
 from .client import TelethonMcpClient
 from .config import load_credentials
-from .tools import auth, dialogs, entities, media, messages
+from .tools import dialogs, entities, media, messages
 
 # Validated at import so a bad environment stops the server at startup rather
 # than surfacing as a failure on the first tool call.
@@ -26,7 +26,7 @@ async def lifespan(server: MCPServer) -> AsyncIterator[dict]:
     if not client.is_authorized():
         print(
             "Warning: Telegram session not authorized. "
-            "Use telegram_auth_start tool or run `telethon-mcp-auth login`.",
+            "Run `telethon-mcp login` in a terminal, then restart the server.",
             file=sys.stderr,
         )
     try:
@@ -42,9 +42,21 @@ except PackageNotFoundError:  # running from a source tree without an install
 
 # mcp 2.x defaults version to "" (1.x reported the SDK's own version), so set it
 # explicitly or clients see a blank version in serverInfo.
-mcp = MCPServer("telethon-mcp", version=_VERSION, lifespan=lifespan)
+mcp = MCPServer(
+    "telethon-mcp",
+    version=_VERSION,
+    instructions=(
+        "Telegram through the user's personal account, not a bot: anything sent appears "
+        "under their name. Use these tools to list dialogs, look up users and chats, read "
+        "history, send messages, and download or send media.\n"
+        "The login is kept in a session file between sessions. Only when a tool reports "
+        "\"Not authorized\", ask the user to run `telethon-mcp login` in a terminal (the "
+        "command that starts this server, with `login` appended) and to restart this MCP "
+        "server afterwards."
+    ),
+    lifespan=lifespan,
+)
 
-auth.register(mcp, client)
 entities.register(mcp, client)
 messages.register(mcp, client)
 dialogs.register(mcp, client)

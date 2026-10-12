@@ -6,10 +6,6 @@ Personal MCP server for Telegram via [Telethon](https://github.com/LonamiWebs/Te
 
 | Tool | Description |
 |------|-------------|
-| `telegram_auth_status` | Check current authorization status (logged-in user info or a hint to start auth) |
-| `telegram_auth_start` | Start login - sends a one-time code to the user's Telegram app |
-| `telegram_auth_submit_code` | Submit the login code received from Telegram |
-| `telegram_auth_submit_password` | Submit the 2FA cloud password to finish login (only if 2FA is enabled) |
 | `telegram_resolve_entity` | Resolve username, phone, or numeric ID to entity details |
 | `telegram_list_dialogs` | List recent dialogs (chats, channels, users) |
 | `telegram_send_message` | Send text message to a user, chat, or channel |
@@ -45,24 +41,24 @@ Requires a Telegram API application. Get `api_id` and `api_hash` from [my.telegr
 
 ### Authentication
 
-First-time auth uses the interactive `telethon-mcp-auth` CLI (prompts for phone, login code, and optional 2FA password).
+Log in from a terminal with the command that starts the server, with `login` appended. It prompts for the phone number, the login code, and the 2FA password if the account has one. There are no login tools: the MCP client never sees the code or the password.
 
-The CLI runs outside the MCP client, so it reads `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from the shell environment - the `env` block in `.mcp.json` never reaches it. Set both first:
+The command runs outside the MCP client, so it reads `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from the shell environment - the `env` block in `.mcp.json` never reaches it. Set both first:
 
 ```bash
 export TELEGRAM_API_ID=your-api-id
 export TELEGRAM_API_HASH=your-api-hash
 
 # Interactive login (prompts for phone, code, 2FA password)
-uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth
+uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp login
 
 # Verify session
-uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp-auth status
+uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp status
 ```
 
-Alternatively, the same flow is exposed as MCP tools (`telegram_auth_start`, `telegram_auth_submit_code`, `telegram_auth_submit_password`) for completing auth directly from an MCP client.
+When a tool reports "Not authorized", run the login, then restart the MCP server.
 
-Session is stored at `~/.telethon-mcp-session`. Once authenticated, the MCP server picks up the session automatically.
+The session is stored at `~/.telethon-mcp-session.session` (Telethon appends `.session`). It holds the account's auth key, so treat it like a password. Delete it to force a fresh login.
 
 ## Development
 
@@ -70,7 +66,7 @@ Session is stored at `~/.telethon-mcp-session`. Once authenticated, the MCP serv
 git clone https://github.com/ssasuoirafen/telethon-mcp-server.git
 cd telethon-mcp-server
 uv sync
-uv run telethon-mcp-auth status
+uv run telethon-mcp status
 ```
 
 ## License

@@ -23,10 +23,6 @@ telethon.TelegramClient = MagicMock()
 from telethon_mcp.server import mcp  # noqa: E402
 
 EXPECTED_TOOLS = {
-    "telegram_auth_status",
-    "telegram_auth_start",
-    "telegram_auth_submit_code",
-    "telegram_auth_submit_password",
     "telegram_resolve_entity",
     "telegram_send_message",
     "telegram_read_history",
@@ -41,7 +37,7 @@ def _tool_names() -> set[str]:
 
 
 def test_tool_count():
-    assert len(_tool_names()) == 10
+    assert len(_tool_names()) == 6
 
 
 def test_tool_names():
