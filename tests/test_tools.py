@@ -9,6 +9,7 @@ import os
 import pytest
 from mcp import Client
 from telethon.errors import UsernameInvalidError
+from telethon.tl.types import Channel, ChatPhotoEmpty
 
 os.environ.setdefault("TELEGRAM_API_ID", "12345")
 os.environ.setdefault("TELEGRAM_API_HASH", "dummyhash")
@@ -76,3 +77,96 @@ async def test_downloading_a_missing_message_is_an_error(sessions):
 
     assert result.is_error
     assert "Message 5 not found" in text(result)
+
+
+def _supergroup() -> Channel:
+    return Channel(
+        id=1001, title="Support", photo=ChatPhotoEmpty(), date=None, megagroup=True,
+        access_hash=1,
+    )
+
+
+async def test_editing_an_own_message_replaces_its_text(sessions):
+    sessions.authorized = True
+    sessions.add_message(10, "old text", out=True)
+
+    result = await call("telegram_edit_message", identifier="alice", message_id=10, text="new")
+
+    assert not result.is_error, text(result)
+    assert sessions.messages[10].message == "new"
+    assert "2026-10-12 09:45" in text(result)  # the edit time, UTC
+
+
+async def test_editing_a_message_from_someone_else_is_refused(sessions):
+    sessions.authorized = True
+    sessions.add_message(11, "their text", out=False)
+
+    result = await call("telegram_edit_message", identifier="alice", message_id=11, text="x")
+
+    assert result.is_error
+    assert sessions.messages[11].message == "their text"
+
+
+async def test_editing_a_missing_message_is_an_error(sessions):
+    sessions.authorized = True
+
+    result = await call("telegram_edit_message", identifier="alice", message_id=12, text="x")
+
+    assert result.is_error
+    assert "Message 12 not found" in text(result)
+
+
+@pytest.mark.parametrize(
+    ("for_everyone", "scope"), [(True, "for everyone"), (False, "only for this account")]
+)
+async def test_deleting_an_own_message_uses_the_chosen_scope(sessions, for_everyone, scope):
+    sessions.authorized = True
+    sessions.add_message(20, "oops", out=True)
+
+    result = await call(
+        "telegram_delete_message", identifier="alice", message_id=20, for_everyone=for_everyone
+    )
+
+    assert not result.is_error, text(result)
+    assert sessions.deleted == [([20], for_everyone)]
+    assert scope in text(result)
+
+
+async def test_deleting_only_for_this_account_in_a_supergroup_is_refused(sessions):
+    # Telethon would silently delete it for everyone: Telegram has no other way there.
+    sessions.authorized = True
+    sessions.chat = _supergroup()
+    sessions.add_message(21, "oops", out=True)
+
+    result = await call(
+        "telegram_delete_message", identifier="support", message_id=21, for_everyone=False
+    )
+
+    assert result.is_error
+    assert sessions.deleted == []
+
+
+async def test_deleting_for_everyone_in_a_supergroup_works(sessions):
+    sessions.authorized = True
+    sessions.chat = _supergroup()
+    sessions.add_message(22, "oops", out=True)
+
+    result = await call(
+        "telegram_delete_message", identifier="support", message_id=22, for_everyone=True
+    )
+
+    assert not result.is_error, text(result)
+    assert sessions.deleted == [([22], True)]
+
+
+async def test_deleting_a_message_from_someone_else_is_refused(sessions):
+    # In a private chat Telegram would allow it, for both sides.
+    sessions.authorized = True
+    sessions.add_message(23, "their text", out=False)
+
+    result = await call(
+        "telegram_delete_message", identifier="alice", message_id=23, for_everyone=True
+    )
+
+    assert result.is_error
+    assert sessions.deleted == []

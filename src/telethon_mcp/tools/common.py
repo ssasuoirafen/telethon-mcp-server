@@ -28,6 +28,12 @@ ADDITIVE = {
     "idempotentHint": False,
     "openWorldHint": True,
 }
+DESTRUCTIVE = {
+    "readOnlyHint": False,
+    "destructiveHint": True,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
 
 # Failures the caller can act on: ours, Telegram refusing a request, and the network or a
 # local file path. mcp 2.x passes only ToolError text to the client; any other exception

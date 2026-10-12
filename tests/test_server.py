@@ -13,6 +13,8 @@ os.environ.setdefault("TELEGRAM_API_HASH", "dummyhash")
 from telethon_mcp.server import mcp  # noqa: E402
 
 EXPECTED_TOOLS = {
+    "telegram_edit_message",
+    "telegram_delete_message",
     "telegram_resolve_entity",
     "telegram_send_message",
     "telegram_read_history",
@@ -27,7 +29,7 @@ def _tool_names() -> set[str]:
 
 
 def test_tool_count():
-    assert len(_tool_names()) == 6
+    assert len(_tool_names()) == 8
 
 
 def test_tool_names():

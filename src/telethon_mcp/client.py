@@ -13,6 +13,7 @@ from telethon import TelegramClient
 from telethon.errors import UnauthorizedError
 from telethon.sessions import SQLiteSession
 from telethon.tl.types import (
+    Channel,
     MessageMediaDocument,
     MessageMediaPhoto,
     MessageMediaWebPage,
@@ -385,3 +386,43 @@ class TelethonMcpClient:
             f"- **ID**: {msg.id}\n"
             f"- **Time**: {self._format_ts(msg.date)}"
         )
+
+    @_requires_login
+    async def edit_message(self, identifier: str, message_id: int, text: str) -> str:
+        entity = await self._get_entity(identifier)
+        await self._own_message(entity, message_id)
+        msg = await self._client.edit_message(entity, message_id, text)
+        return (
+            f"Message edited.\n"
+            f"- **ID**: {msg.id}\n"
+            f"- **Edited**: {self._format_ts(msg.edit_date or msg.date)}"
+        )
+
+    @_requires_login
+    async def delete_message(self, identifier: str, message_id: int, for_everyone: bool) -> str:
+        entity = await self._get_entity(identifier)
+        if not for_everyone and isinstance(entity, Channel):
+            # Telethon would delete it for everyone anyway: Telegram has no other way there.
+            raise TelethonMcpError(
+                "Supergroups and channels cannot delete a message only for this account: "
+                "Telegram deletes it for everyone or not at all."
+            )
+        await self._own_message(entity, message_id)
+        await self._client.delete_messages(entity, [message_id], revoke=for_everyone)
+        scope = "for everyone" if for_everyone else "only for this account"
+        return f"Message {message_id} deleted {scope}."
+
+    async def _own_message(self, entity, message_id: int):
+        """The message, if it exists and was sent from this account.
+
+        Telegram itself lets a private chat delete the other side's messages too.
+        """
+        msg = await self._client.get_messages(entity, ids=message_id)
+        if msg is None:
+            raise TelethonMcpError(f"Message {message_id} not found.")
+        if not msg.out:
+            raise TelethonMcpError(
+                f"Message {message_id} was not sent from this account; only messages sent "
+                "from this account can be edited or deleted."
+            )
+        return msg

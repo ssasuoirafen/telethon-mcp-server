@@ -48,7 +48,7 @@ mcp = MCPServer(
     instructions=(
         "Telegram through the user's personal account, not a bot: anything sent appears "
         "under their name. Use these tools to list dialogs, look up users and chats, read "
-        "history, send messages, and download or send media.\n"
+        "history, send, edit and delete messages, and download or send media.\n"
         "The login is kept in a session file between sessions. Only when a tool reports "
         "\"Not authorized\", ask the user to run `telethon-mcp login` in a terminal (the "
         "command that starts this server, with `login` appended) and retry once they have "

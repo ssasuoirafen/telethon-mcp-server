@@ -57,7 +57,7 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 ### Tool modules
 
 - `entities.py` - `telegram_resolve_entity`
-- `messages.py` - `telegram_send_message`, `telegram_read_history`
+- `messages.py` - `telegram_send_message`, `telegram_read_history`, `telegram_edit_message`, `telegram_delete_message`
 - `dialogs.py` - `telegram_list_dialogs`
 - `media.py` - `telegram_download_media`, `telegram_send_media`
 
@@ -69,6 +69,7 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 - **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools return `NOT_AUTHORIZED` until the user runs `telethon-mcp login`.
 - **Session writes are committed at once** - Telethon caches the entities of every result and update in the session file but commits them only once a minute, and the open transaction write-locks the file until then. Every MCP client session runs its own server process on that file, as do `login` and `status`, so `_CommittingSession` (`client.py`) commits right after the writes Telethon 1.45 defers: `process_entities`, `set_update_state`, and `get_entity_rows_by_username` (it clears stale duplicate usernames). Re-check that list when the lock moves to a newer Telethon; `test_session_writes_leave_the_file_unlocked` covers the three.
 - **Login picked up without a restart** - the server does not keep an unauthorized connection, so it holds no session file while a terminal login writes it. A tool call without a connection opens a new `TelegramClient` from the session file, under a lock so parallel calls share one. Re-checking the old client would never see the login: Telethon caches `is_user_authorized()` per client, and a login may switch to another DC and write a new auth key. A 401 from Telegram (`UnauthorizedError`, e.g. the session was terminated from another device) drops the connection and returns `NOT_AUTHORIZED`.
+- **Edit and delete only own messages** - `_own_message()` refuses a message that is missing or was not sent from this account, although Telegram lets a private chat delete the other side's messages too. `telegram_delete_message` takes `for_everyone` without a default. Supergroups and channels cannot delete a message only for this account, and Telethon's `delete_messages(revoke=False)` silently deletes it for everyone there, so that combination is refused before any call.
 - **No logging configured** - failures reach the client as MCP errors (see Error handling); crashes leave their traceback on the server's stderr.
 - **Flood-wait errors from Telegram** are not retried/backed off - they reach the client as MCP errors carrying Telegram's message.
 

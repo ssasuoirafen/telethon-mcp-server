@@ -9,6 +9,8 @@ Personal MCP server for Telegram via [Telethon](https://github.com/LonamiWebs/Te
 | `telegram_resolve_entity` | Resolve username, phone, or numeric ID to entity details |
 | `telegram_list_dialogs` | List recent dialogs (chats, channels, users) |
 | `telegram_send_message` | Send text message to a user, chat, or channel |
+| `telegram_edit_message` | Replace the text of a message sent from this account |
+| `telegram_delete_message` | Delete a message sent from this account, for everyone or only for this account |
 | `telegram_read_history` | Read message history from a chat |
 | `telegram_download_media` | Download media (photo, video, document, voice, sticker) from a message |
 | `telegram_send_media` | Upload and send a local file as media |
