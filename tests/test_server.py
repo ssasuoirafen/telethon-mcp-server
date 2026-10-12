@@ -1,24 +1,14 @@
 """Tests for server assembly and tool registration surface.
 
-Two import-time hazards in telethon_mcp.server are handled before importing it:
-
-1. TELEGRAM_API_ID / TELEGRAM_API_HASH are validated at module import - dummy
-   values are set first.
-2. server.py instantiates TelethonMcpClient at module level, whose __init__ is
-   NOT lazy: it constructs telethon.TelegramClient, which opens a SQLite session
-   file. We stub TelegramClient with a no-op so import does no I/O and no network.
-   The tool closures are never invoked here, so a stub client is sufficient - we
-   only assert the registered tool surface.
+TELEGRAM_API_ID / TELEGRAM_API_HASH are validated at module import, so dummy values
+are set before importing telethon_mcp.server. The import opens no session file: the
+client connects in the lifespan, which these tests never run.
 """
 
 import os
-from unittest.mock import MagicMock
-
-import telethon
 
 os.environ.setdefault("TELEGRAM_API_ID", "12345")
 os.environ.setdefault("TELEGRAM_API_HASH", "dummyhash")
-telethon.TelegramClient = MagicMock()
 
 from telethon_mcp.server import mcp  # noqa: E402
 

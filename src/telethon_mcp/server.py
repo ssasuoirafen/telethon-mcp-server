@@ -25,8 +25,8 @@ async def lifespan(server: MCPServer) -> AsyncIterator[dict]:
     await client.connect()
     if not client.is_authorized():
         print(
-            "Warning: Telegram session not authorized. "
-            "Run `telethon-mcp login` in a terminal, then restart the server.",
+            "Warning: Telegram session not authorized. Run `telethon-mcp login` in a "
+            "terminal; the server picks up the login on the next tool call.",
             file=sys.stderr,
         )
     try:
@@ -51,8 +51,8 @@ mcp = MCPServer(
         "history, send messages, and download or send media.\n"
         "The login is kept in a session file between sessions. Only when a tool reports "
         "\"Not authorized\", ask the user to run `telethon-mcp login` in a terminal (the "
-        "command that starts this server, with `login` appended) and to restart this MCP "
-        "server afterwards."
+        "command that starts this server, with `login` appended) and retry once they have "
+        "logged in; the server picks up the login without a restart."
     ),
     lifespan=lifespan,
 )

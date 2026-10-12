@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from telethon import TelegramClient
+from telethon.errors import UnauthorizedError
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaPhoto,
@@ -25,7 +28,7 @@ SESSION_PATH = str(Path.home() / ".telethon-mcp-session")
 # The server instructions key off "Not authorized", so keep that prefix.
 NOT_AUTHORIZED = (
     "Not authorized. Ask the user to run `telethon-mcp login` in a terminal (the command "
-    "that starts this server, with `login` appended), then restart this MCP server."
+    "that starts this server, with `login` appended), then retry."
 )
 
 
@@ -34,32 +37,69 @@ def open_telegram_client(session_path: str, api_id: int, api_hash: str) -> Teleg
     return TelegramClient(session_path, api_id, api_hash)
 
 
+def _requires_login(method):
+    """Run a tool method on an authorized connection; a 401 from Telegram drops it."""
+
+    @functools.wraps(method)
+    async def wrapper(self: TelethonMcpClient, *args, **kwargs):
+        await self._ensure_authorized()
+        try:
+            return await method(self, *args, **kwargs)
+        except UnauthorizedError as exc:
+            # Revoked or expired: release the session file for `telethon-mcp login`.
+            await self._close()
+            raise RuntimeError(NOT_AUTHORIZED) from exc
+
+    return wrapper
+
+
 class TelethonMcpClient:
     def __init__(self, api_id: int, api_hash: str) -> None:
-        self._client = open_telegram_client(SESSION_PATH, api_id, api_hash)
+        self._api_id = api_id
+        self._api_hash = api_hash
+        # Connected and authorized, or None. An unauthorized connection is not kept: it
+        # would hold the session file that `telethon-mcp login` in a terminal writes.
+        self._client: TelegramClient | None = None
         self._me: User | None = None
-        self._authorized: bool = False
+        self._open_lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        await self._client.connect()
-        await self._refresh_auth_state()
+        await self._open()
 
     async def disconnect(self) -> None:
-        await self._client.disconnect()
+        await self._close()
 
-    async def _refresh_auth_state(self) -> None:
-        if await self._client.is_user_authorized():
-            self._authorized = True
-            self._me = await self._client.get_me()
-        else:
-            self._authorized = False
-            self._me = None
+    async def _open(self) -> None:
+        """Connect with what the session file holds now; keep the connection if authorized."""
+        client = open_telegram_client(SESSION_PATH, self._api_id, self._api_hash)
+        keep = False
+        try:
+            await client.connect()
+            if await client.is_user_authorized():
+                self._me = await client.get_me()
+                keep = True
+        finally:
+            if keep:
+                self._client = client
+            else:
+                await client.disconnect()
+
+    async def _close(self) -> None:
+        client, self._client, self._me = self._client, None, None
+        if client is not None:
+            await client.disconnect()
 
     def is_authorized(self) -> bool:
-        return self._authorized
+        return self._client is not None
 
     async def _ensure_authorized(self) -> None:
-        if not self._authorized:
+        if self._client is None:
+            async with self._open_lock:
+                # A login from a terminal since the last check is only in the session file,
+                # and Telethon caches is_user_authorized() per client, so open a new one.
+                if self._client is None:
+                    await self._open()
+        if self._client is None:
             raise RuntimeError(NOT_AUTHORIZED)
 
     def _parse_id(self, identifier: str) -> int | str:
@@ -155,8 +195,8 @@ class TelethonMcpClient:
             return f"[Forwarded from {type_name}:{peer_id}]"
         return "[Forwarded]"
 
+    @_requires_login
     async def resolve_entity(self, identifier: str) -> str:
-        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         if not isinstance(entity, User):
             lines = [
@@ -178,8 +218,8 @@ class TelethonMcpClient:
         lines.append(f"- **Status**: {self._format_user_status(entity)}")
         return "\n".join(lines)
 
+    @_requires_login
     async def send_message(self, identifier: str, text: str) -> str:
-        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.send_message(entity, text)
         return (
@@ -188,10 +228,10 @@ class TelethonMcpClient:
             f"- **Time**: {self._format_ts(msg.date)}"
         )
 
+    @_requires_login
     async def read_history(
         self, identifier: str, limit: int = 20, min_id: int | None = None,
     ) -> str:
-        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         kwargs: dict = {"limit": limit}
         if min_id is not None:
@@ -247,8 +287,8 @@ class TelethonMcpClient:
 
         return "\n".join(lines)
 
+    @_requires_login
     async def list_dialogs(self, limit: int = 20) -> str:
-        await self._ensure_authorized()
         dialogs = await self._client.get_dialogs(limit=limit)
 
         if not dialogs:
@@ -268,10 +308,10 @@ class TelethonMcpClient:
 
         return "\n".join(lines)
 
+    @_requires_login
     async def download_media(
         self, identifier: str, message_id: int, download_path: str | None = None,
     ) -> str:
-        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.get_messages(entity, ids=message_id)
 
@@ -287,10 +327,10 @@ class TelethonMcpClient:
             return "Failed to download media."
         return f"Downloaded to: {Path(path).resolve()}"
 
+    @_requires_login
     async def send_media(
         self, identifier: str, file_path: str, caption: str | None = None,
     ) -> str:
-        await self._ensure_authorized()
         entity = await self._client.get_entity(self._parse_id(identifier))
         msg = await self._client.send_file(entity, file_path, caption=caption)
         return (

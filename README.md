@@ -56,7 +56,7 @@ uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp 
 uvx --from git+https://github.com/ssasuoirafen/telethon-mcp-server telethon-mcp status
 ```
 
-When a tool reports "Not authorized", run the login, then restart the MCP server.
+When a tool reports "Not authorized", run the login. A running server picks it up on the next tool call, without a restart.
 
 The session is stored at `~/.telethon-mcp-session.session` (Telethon appends `.session`). It holds the account's auth key, so treat it like a password. Delete it to force a fresh login.
 

@@ -36,7 +36,7 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 **Server**: `src/telethon_mcp/server.py` - creates the `MCPServer` instance with `instructions`, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
 
-**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. `open_telegram_client()` opens the session file at `SESSION_PATH` for both the server and the CLI. `_ensure_authorized()` guard raises `RuntimeError(NOT_AUTHORIZED)` if the session is not authorized.
+**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. `open_telegram_client()` opens the session file at `SESSION_PATH` for both the server and the CLI. The wrapper keeps a connection only while the session is authorized (`_open()`). `@_requires_login` on every tool method reopens from the session file when there is no connection (`_ensure_authorized()`), raises `RuntimeError(NOT_AUTHORIZED)` when there is still no login, and turns a 401 from Telegram into the same error.
 
 **Credentials**: `src/telethon_mcp/config.py` - `load_credentials()` reads and validates `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`, or exits 1 with guidance. Shared by `server.py` and `cli.py` so both fail the same way. Never echoes the offending value: the usual mistake is pasting the api_hash into the api_id slot.
 
@@ -45,7 +45,8 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 ### Login
 
 - No login tools: the only way in is `telethon-mcp login` in a terminal (the command that starts the server, with `login` appended). The agent never relays a login code or the 2FA password
-- `NOT_AUTHORIZED` (`client.py`) tells the agent to ask the user to run that command; the server instructions key off its "Not authorized" prefix
+- `NOT_AUTHORIZED` (`client.py`) tells the agent to ask the user to run that command and retry; the server instructions key off its "Not authorized" prefix
+- A running server picks up the login on the next tool call, without a restart (see Known Quirks)
 
 ### Tool modules
 
@@ -59,13 +60,14 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 - **Session path hardcoded** as `SESSION_PATH` in `client.py`. Not overridable via env. Telethon appends `.session`, so the file on disk is `~/.telethon-mcp-session.session`; delete it to force a fresh login.
 - **Session schema migrates one-way** - Telethon rewrites the session file in place when it bumps the schema (v7 -> v8 added a `tmp_auth_key` column). A session file touched by 1.44 can no longer be opened by 1.42, which dies with `ValueError: too many values to unpack (expected 5)`. Keep the dependency floor and `uv.lock` on the same Telethon, or `uv run` and `uvx` fight over the same file. That error was observed on Python 3.13.12, so it comes from Telethon's migration, not from Python 3.14's sqlite3. Python 3.14 was later checked on its own (tests plus an offline session round-trip) and showed no problem, so the precautionary `<3.14` cap was dropped.
 - **Env vars validated at import** (top-level in `server.py`, via `config.load_credentials()`) - a missing or non-numeric `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` exits immediately with a clear stderr message. Like remnawave-mcp-server, this fails fast at import rather than deferring to the first tool call. `cli.main()` parses the arguments first and imports `server.py` only when no subcommand is given, so `--help` or a mistyped subcommand does not first demand a valid environment.
-- **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools then raise `RuntimeError` via `_ensure_authorized()` until the user runs `telethon-mcp login` and the server is restarted.
+- **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools return `NOT_AUTHORIZED` until the user runs `telethon-mcp login`.
+- **Login picked up without a restart** - the server does not keep an unauthorized connection, so it holds no session file while a terminal login writes it. A tool call without a connection opens a new `TelegramClient` from the session file, under a lock so parallel calls share one. Re-checking the old client would never see the login: Telethon caches `is_user_authorized()` per client, and a login may switch to another DC and write a new auth key. A 401 from Telegram (`UnauthorizedError`, e.g. the session was terminated from another device) drops the connection and returns `NOT_AUTHORIZED`.
 - **No logging configured** - errors surface only through `handle_error()` as tool return strings.
 - **Flood-wait errors from Telegram** are not retried/backed off - propagate to tool return as raw error strings.
 
 ## Adding a New Tool
 
-1. Add a method on `TelethonMcpClient` in `client.py` (start with `await self._ensure_authorized()` if auth required)
+1. Add a method on `TelethonMcpClient` in `client.py`; if it needs the login, decorate it with `@_requires_login` and use `self._client`
 2. Create or pick a module in `src/telethon_mcp/tools/`
 3. Define Pydantic input model with `Field` descriptions
 4. Write `register(mcp, client)` with `@mcp.tool()` async function that calls the client method
