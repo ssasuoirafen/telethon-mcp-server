@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -800,7 +800,7 @@ wheels = [
 
 [[package]]
 name = "telethon-mcp-server"
-version = "0.1.6"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
