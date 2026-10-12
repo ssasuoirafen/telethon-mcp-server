@@ -21,7 +21,7 @@ from telethon.tl.types import PeerUser, User
 from telethon.tl.types.contacts import ResolvedPeer
 from telethon.tl.types.updates import State
 
-from telethon_mcp.client import TelethonMcpClient, open_telegram_client
+from telethon_mcp.client import TelethonMcpClient, TelethonMcpError, open_telegram_client
 
 client = TelethonMcpClient(12345, "dummyhash")
 
@@ -113,7 +113,7 @@ def _revoke(sessions) -> None:
 async def test_tool_call_without_a_session_points_at_the_login_command(sessions):
     unauthorized = TelethonMcpClient(12345, "dummyhash")
 
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises(TelethonMcpError) as exc:
         await unauthorized.list_dialogs()
 
     message = str(exc.value)
@@ -150,7 +150,7 @@ async def test_revoked_session_is_dropped_with_not_authorized(sessions):
     started = await _start(sessions, authorized=True)
     _revoke(sessions)
 
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises(TelethonMcpError) as exc:
         await started.list_dialogs()
 
     assert str(exc.value).startswith("Not authorized")
@@ -160,7 +160,7 @@ async def test_revoked_session_is_dropped_with_not_authorized(sessions):
 async def test_login_after_a_revoked_session_is_picked_up(sessions):
     started = await _start(sessions, authorized=True)
     _revoke(sessions)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TelethonMcpError):
         await started.list_dialogs()
 
     sessions.authorized = True

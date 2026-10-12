@@ -5,29 +5,18 @@ from __future__ import annotations
 from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, Field
 
-from ..client import TelethonMcpClient, handle_error
+from ..client import TelethonMcpClient
+from .common import IDENTIFIER_DESCRIPTION, READ_ONLY, register_tool
 
 
 class ResolveInput(BaseModel):
-    identifier: str = Field(
-        ...,
-        description=(
-            "@username, phone number with a leading + (e.g. +79991234567; found only among "
-            "this account's contacts), or numeric chat ID as shown by telegram_list_dialogs "
-            "(resolves only for chats this session has seen)"
-        ),
-    )
+    identifier: str = Field(..., description=IDENTIFIER_DESCRIPTION)
 
 
 def register(mcp: MCPServer, client: TelethonMcpClient) -> None:
 
-    @mcp.tool(
-        name="telegram_resolve_entity",
-        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
-    )
+    @register_tool(mcp, name="telegram_resolve_entity", annotations=READ_ONLY)
     async def resolve_entity(params: ResolveInput) -> str:
-        """Resolve a Telegram username, phone, or ID to full user info (name, status, phone, bot flag)."""
-        try:
-            return await client.resolve_entity(params.identifier)
-        except Exception as e:
-            return handle_error(e)
+        """Resolve a Telegram username, phone, or ID to full user info (name, status,
+        phone, bot flag)."""
+        return await client.resolve_entity(params.identifier)

@@ -27,6 +27,10 @@ from telethon.tl.types import (
 # Telethon appends ".session", so the file on disk is ~/.telethon-mcp-session.session.
 SESSION_PATH = str(Path.home() / ".telethon-mcp-session")
 
+class TelethonMcpError(Exception):
+    """An anticipated failure; its message says what the agent or the user can do."""
+
+
 # The server instructions key off "Not authorized", so keep that prefix.
 NOT_AUTHORIZED = (
     "Not authorized. Ask the user to run `telethon-mcp login` in a terminal (the command "
@@ -80,7 +84,7 @@ def _requires_login(method):
         except UnauthorizedError as exc:
             # Revoked or expired: release the session file for `telethon-mcp login`.
             await self._close()
-            raise RuntimeError(NOT_AUTHORIZED) from exc
+            raise TelethonMcpError(NOT_AUTHORIZED) from exc
 
     return wrapper
 
@@ -132,7 +136,14 @@ class TelethonMcpClient:
                 if self._client is None:
                     await self._open()
         if self._client is None:
-            raise RuntimeError(NOT_AUTHORIZED)
+            raise TelethonMcpError(NOT_AUTHORIZED)
+
+    async def _get_entity(self, identifier: str):
+        try:
+            return await self._client.get_entity(self._parse_id(identifier))
+        except ValueError as exc:
+            # Telethon's way of saying the username, phone or ID resolves to nothing.
+            raise TelethonMcpError(str(exc)) from exc
 
     def _parse_id(self, identifier: str) -> int | str:
         # int() accepts a leading sign, so "+79991234567" would become a user ID.
@@ -229,7 +240,7 @@ class TelethonMcpClient:
 
     @_requires_login
     async def resolve_entity(self, identifier: str) -> str:
-        entity = await self._client.get_entity(self._parse_id(identifier))
+        entity = await self._get_entity(identifier)
         if not isinstance(entity, User):
             lines = [
                 f"## {getattr(entity, 'title', str(entity.id))}",
@@ -252,7 +263,7 @@ class TelethonMcpClient:
 
     @_requires_login
     async def send_message(self, identifier: str, text: str) -> str:
-        entity = await self._client.get_entity(self._parse_id(identifier))
+        entity = await self._get_entity(identifier)
         msg = await self._client.send_message(entity, text)
         return (
             f"Message sent.\n"
@@ -264,7 +275,7 @@ class TelethonMcpClient:
     async def read_history(
         self, identifier: str, limit: int = 20, min_id: int | None = None,
     ) -> str:
-        entity = await self._client.get_entity(self._parse_id(identifier))
+        entity = await self._get_entity(identifier)
         kwargs: dict = {"limit": limit}
         if min_id is not None:
             kwargs["min_id"] = min_id
@@ -344,33 +355,29 @@ class TelethonMcpClient:
     async def download_media(
         self, identifier: str, message_id: int, download_path: str | None = None,
     ) -> str:
-        entity = await self._client.get_entity(self._parse_id(identifier))
+        entity = await self._get_entity(identifier)
         msg = await self._client.get_messages(entity, ids=message_id)
 
         if msg is None:
-            return f"Message {message_id} not found."
+            raise TelethonMcpError(f"Message {message_id} not found.")
         if msg.media is None:
-            return f"Message {message_id} has no media."
+            raise TelethonMcpError(f"Message {message_id} has no media.")
 
         target = download_path or tempfile.mkdtemp(prefix="telethon-mcp-")
         path = await self._client.download_media(msg, file=target)
 
         if path is None:
-            return "Failed to download media."
+            raise TelethonMcpError(f"Telegram returned no file for message {message_id}.")
         return f"Downloaded to: {Path(path).resolve()}"
 
     @_requires_login
     async def send_media(
         self, identifier: str, file_path: str, caption: str | None = None,
     ) -> str:
-        entity = await self._client.get_entity(self._parse_id(identifier))
+        entity = await self._get_entity(identifier)
         msg = await self._client.send_file(entity, file_path, caption=caption)
         return (
             f"Media sent.\n"
             f"- **ID**: {msg.id}\n"
             f"- **Time**: {self._format_ts(msg.date)}"
         )
-
-
-def handle_error(e: Exception) -> str:
-    return f"Error: {e}"

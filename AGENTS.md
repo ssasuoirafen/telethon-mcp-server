@@ -36,11 +36,17 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 
 **Server**: `src/telethon_mcp/server.py` - creates the `MCPServer` instance with `instructions`, instantiates persistent `TelethonMcpClient`, wires it into lifespan (`connect` on startup, `disconnect` on shutdown), registers all tool modules.
 
-**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. `open_telegram_client()` opens the session file at `SESSION_PATH` for both the server and the CLI. The wrapper keeps a connection only while the session is authorized (`_open()`). `@_requires_login` on every tool method reopens from the session file when there is no connection (`_ensure_authorized()`), raises `RuntimeError(NOT_AUTHORIZED)` when there is still no login, and turns a 401 from Telegram into the same error.
+**Client wrapper**: `src/telethon_mcp/client.py` - `TelethonMcpClient` wraps `telethon.TelegramClient`. One method per tool. `open_telegram_client()` opens the session file at `SESSION_PATH` for both the server and the CLI. The wrapper keeps a connection only while the session is authorized (`_open()`). `@_requires_login` on every tool method reopens from the session file when there is no connection (`_ensure_authorized()`), raises `TelethonMcpError(NOT_AUTHORIZED)` when there is still no login, and turns a 401 from Telegram into the same error. The client raises `TelethonMcpError` for every anticipated failure it detects itself and stays unaware of MCP.
 
 **Credentials**: `src/telethon_mcp/config.py` - `load_credentials()` reads and validates `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`, or exits 1 with guidance. Shared by `server.py` and `cli.py` so both fail the same way. Never echoes the offending value: the usual mistake is pasting the api_hash into the api_id slot.
 
-**Tool modules**: `src/telethon_mcp/tools/` - each module exports `register(mcp, client)` with `@mcp.tool()` async functions.
+**Tool modules**: `src/telethon_mcp/tools/` - each module exports `register(mcp, client)` with async functions registered through `register_tool` from `tools/common.py`, which also holds the shared identifier description and the annotation presets.
+
+### Error handling
+
+- mcp 2.x passes only `ToolError` text to the client (an `is_error` result prefixed `Error executing tool <name>: `). Any other exception is a crash: the client sees only `Error executing tool <name>`, and the traceback goes to the server's stderr
+- `register_tool` re-raises the anticipated failures (`ANTICIPATED_ERRORS`: `TelethonMcpError`, Telethon's `RPCError`, `OSError`) as `ToolError` and leaves everything else a crash, so real bugs keep their traceback. `ValueError` is deliberately not in the list: Telethon raises it for an identifier that resolves to nothing, so `_get_entity()` converts that one case and other `ValueError`s stay bugs
+- Tools return `str` (markdown) on success; a missing message or media is a failure, not a notice
 
 ### Login
 
@@ -63,15 +69,15 @@ npx @modelcontextprotocol/inspector uv run telethon-mcp
 - **Lifespan tolerates unauthorized session** - server starts and emits stderr warning. Tools return `NOT_AUTHORIZED` until the user runs `telethon-mcp login`.
 - **Session writes are committed at once** - Telethon caches the entities of every result and update in the session file but commits them only once a minute, and the open transaction write-locks the file until then. Every MCP client session runs its own server process on that file, as do `login` and `status`, so `_CommittingSession` (`client.py`) commits right after the writes Telethon 1.45 defers: `process_entities`, `set_update_state`, and `get_entity_rows_by_username` (it clears stale duplicate usernames). Re-check that list when the lock moves to a newer Telethon; `test_session_writes_leave_the_file_unlocked` covers the three.
 - **Login picked up without a restart** - the server does not keep an unauthorized connection, so it holds no session file while a terminal login writes it. A tool call without a connection opens a new `TelegramClient` from the session file, under a lock so parallel calls share one. Re-checking the old client would never see the login: Telethon caches `is_user_authorized()` per client, and a login may switch to another DC and write a new auth key. A 401 from Telegram (`UnauthorizedError`, e.g. the session was terminated from another device) drops the connection and returns `NOT_AUTHORIZED`.
-- **No logging configured** - errors surface only through `handle_error()` as tool return strings.
-- **Flood-wait errors from Telegram** are not retried/backed off - propagate to tool return as raw error strings.
+- **No logging configured** - failures reach the client as MCP errors (see Error handling); crashes leave their traceback on the server's stderr.
+- **Flood-wait errors from Telegram** are not retried/backed off - they reach the client as MCP errors carrying Telegram's message.
 
 ## Adding a New Tool
 
-1. Add a method on `TelethonMcpClient` in `client.py`; if it needs the login, decorate it with `@_requires_login` and use `self._client`
+1. Add a method on `TelethonMcpClient` in `client.py`; if it needs the login, decorate it with `@_requires_login` and use `self._client`. Resolve chats with `_get_entity()` and raise `TelethonMcpError` for failures the agent can act on
 2. Create or pick a module in `src/telethon_mcp/tools/`
-3. Define Pydantic input model with `Field` descriptions
-4. Write `register(mcp, client)` with `@mcp.tool()` async function that calls the client method
+3. Define Pydantic input model with `Field` descriptions (`IDENTIFIER_DESCRIPTION` for a chat argument)
+4. Write `register(mcp, client)` with an async function under `@register_tool(mcp, name=..., annotations=<preset>)` that calls the client method
 5. Import and call `module.register(mcp, client)` in `server.py`
 
 ## Usage
@@ -91,13 +97,13 @@ Remote install from git (see README for full example):
 ## Git
 
 - Single branch (`main`). CI (`.github/workflows/ci.yml`): `uv sync` + pytest + advisory ruff on push/PR
-- ruff + pytest in the dev group (`uv sync`); tests in `tests/` (`uv run pytest`) cover tool registration, credential loading, the CLI and the client's authorization handling, with a fake `TelegramClient` from `conftest.py` instead of the network. No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
+- ruff + pytest in the dev group (`uv sync`); tests in `tests/` (`uv run pytest`) cover tool registration, credential loading, the CLI, the client's authorization handling, and what tools return through the MCP layer (`test_tools.py`, in-process `mcp.Client`), with a fake `TelegramClient` from `conftest.py` instead of the network. No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
 
 ## Conventions
 
 - Tool names prefixed with `telegram_` (e.g., `telegram_send_message`)
 - Package manager: `uv`, build backend: hatchling
-- All tools return `str` (markdown)
+- Tools return `str` (markdown); failures raise (see Error handling)
 
 ## Backlog
 
