@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,7 +35,12 @@ NOT_AUTHORIZED = (
 
 def open_telegram_client(session_path: str, api_id: int, api_hash: str) -> TelegramClient:
     """A TelegramClient on the session file; the MCP server and the CLI both open it here."""
-    return TelegramClient(session_path, api_id, api_hash)
+    client = TelegramClient(session_path, api_id, api_hash)
+    # The file holds the auth key: full access to the account, 2FA included. SQLite creates
+    # it with the default mode (0644 under the usual umask) and gives its journal files the
+    # database file's mode. On Windows os.chmod only clears the read-only flag.
+    os.chmod(client.session.filename, 0o600)
+    return client
 
 
 def _requires_login(method):

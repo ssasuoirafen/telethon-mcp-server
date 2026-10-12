@@ -10,12 +10,35 @@ terminal while the server is up.
 """
 
 import asyncio
+import os
+import stat
+import sys
 
 import pytest
 
-from telethon_mcp.client import TelethonMcpClient
+from telethon_mcp.client import TelethonMcpClient, open_telegram_client
 
 client = TelethonMcpClient(12345, "dummyhash")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="os.chmod only sets the read-only flag there")
+@pytest.mark.parametrize("existing_mode", [None, 0o644], ids=["new file", "existing 0644 file"])
+async def test_session_file_is_readable_only_by_its_owner(tmp_path, existing_mode):
+    # The file holds the auth key: whoever reads it has the account, 2FA included.
+    session_file = tmp_path / "telethon.session"
+    if existing_mode is not None:
+        session_file.touch()
+        os.chmod(session_file, existing_mode)
+    old_umask = os.umask(0o022)  # the usual umask, under which SQLite creates 0644 files
+    try:
+        opened = open_telegram_client(str(tmp_path / "telethon"), 12345, "dummyhash")
+    finally:
+        os.umask(old_umask)
+
+    try:
+        assert stat.S_IMODE(session_file.stat().st_mode) == 0o600
+    finally:
+        await opened.disconnect()
 
 
 async def _start(sessions, *, authorized: bool) -> TelethonMcpClient:
