@@ -11,6 +11,7 @@ from pathlib import Path
 
 from telethon import TelegramClient
 from telethon.errors import UnauthorizedError
+from telethon.sessions import SQLiteSession
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaPhoto,
@@ -33,9 +34,34 @@ NOT_AUTHORIZED = (
 )
 
 
+class _CommittingSession(SQLiteSession):
+    """A SQLiteSession that commits each write Telethon would otherwise leave open.
+
+    Telethon caches the entities of every result and update in the session file but
+    commits them once a minute, and the open transaction write-locks the file until then.
+    Every MCP client session runs its own server process on this file, as do `login` and
+    `status`, so another process would fail with "database is locked" after five seconds.
+    These are the deferred writes in Telethon 1.45; re-check them when upgrading.
+    """
+
+    def process_entities(self, tlo):
+        super().process_entities(tlo)
+        self.save()
+
+    def set_update_state(self, entity_id, state):
+        super().set_update_state(entity_id, state)
+        self.save()
+
+    def get_entity_rows_by_username(self, username):
+        # Clears the username on stale duplicate rows, a write inside a read.
+        rows = super().get_entity_rows_by_username(username)
+        self.save()
+        return rows
+
+
 def open_telegram_client(session_path: str, api_id: int, api_hash: str) -> TelegramClient:
     """A TelegramClient on the session file; the MCP server and the CLI both open it here."""
-    client = TelegramClient(session_path, api_id, api_hash)
+    client = TelegramClient(_CommittingSession(session_path), api_id, api_hash)
     # The file holds the auth key: full access to the account, 2FA included. SQLite creates
     # it with the default mode (0644 under the usual umask) and gives its journal files the
     # database file's mode. On Windows os.chmod only clears the read-only flag.

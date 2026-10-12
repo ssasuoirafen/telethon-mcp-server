@@ -11,14 +11,68 @@ terminal while the server is up.
 
 import asyncio
 import os
+import sqlite3
 import stat
 import sys
+from datetime import UTC, datetime
 
 import pytest
+from telethon.tl.types import PeerUser, User
+from telethon.tl.types.contacts import ResolvedPeer
+from telethon.tl.types.updates import State
 
 from telethon_mcp.client import TelethonMcpClient, open_telegram_client
 
 client = TelethonMcpClient(12345, "dummyhash")
+
+
+def _write_lock_is_free(session_file) -> bool:
+    """Whether another process could write the session file right now."""
+    probe = sqlite3.connect(session_file, timeout=0)
+    try:
+        probe.execute("BEGIN IMMEDIATE")
+        probe.rollback()
+        return True
+    except sqlite3.OperationalError:  # "database is locked"
+        return False
+    finally:
+        probe.close()
+
+
+def _cache_entities(session) -> None:
+    # Telethon does this with the entities of every result and every update.
+    owner = User(id=777, access_hash=4242, username="owner", first_name="Owner")
+    session.process_entities(ResolvedPeer(PeerUser(777), [owner], []))
+
+
+def _save_update_state(session) -> None:
+    # Telethon does this when its in-memory entity cache overflows.
+    session.set_update_state(0, State(pts=1, qts=0, date=datetime.now(UTC), seq=0, unread_count=0))
+
+
+def _look_up_a_duplicate_username(session) -> None:
+    old = User(id=1, access_hash=11, username="dup", first_name="Old")
+    new = User(id=2, access_hash=22, username="dup", first_name="New")
+    session.process_entities(ResolvedPeer(PeerUser(2), [old, new], []))
+    session.save()  # only the lookup below is under test
+    # The lookup clears the username on the older row: a write inside a read.
+    session.get_entity_rows_by_username("dup")
+
+
+@pytest.mark.parametrize(
+    "write",
+    [_cache_entities, _save_update_state, _look_up_a_duplicate_username],
+    ids=["entities", "update state", "duplicate username"],
+)
+async def test_session_writes_leave_the_file_unlocked(tmp_path, write):
+    """Every MCP client session runs its own server process on the same file."""
+    opened = open_telegram_client(str(tmp_path / "telethon"), 12345, "dummyhash")
+    try:
+        write(opened.session)
+
+        assert _write_lock_is_free(tmp_path / "telethon.session")
+    finally:
+        await opened.disconnect()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="os.chmod only sets the read-only flag there")
