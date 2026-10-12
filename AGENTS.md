@@ -96,8 +96,8 @@ Remote install from git (see README for full example):
 
 ## Git
 
-- Single branch (`main`). CI (`.github/workflows/ci.yml`): `uv sync` + pytest + advisory ruff on push/PR
-- ruff + pytest in the dev group (`uv sync`); tests in `tests/` (`uv run pytest`) cover tool registration, credential loading, the CLI, the client's authorization handling, and what tools return through the MCP layer (`test_tools.py`, in-process `mcp.Client`), with a fake `TelegramClient` from `conftest.py` instead of the network. No pre-commit hooks; ruff is advisory in CI until the pre-existing source lint is cleaned
+- Single branch (`main`). CI (`.github/workflows/ci.yml`): `uv sync` + ruff + pytest on push/PR
+- ruff + pytest in the dev group (`uv sync`); tests in `tests/` (`uv run pytest`) cover tool registration, credential loading, the CLI, the client's authorization handling, and what tools return through the MCP layer (`test_tools.py`, in-process `mcp.Client`), with a fake `TelegramClient` from `conftest.py` instead of the network. No pre-commit hooks; ruff fails CI, so run `uv run ruff check .` before pushing
 
 ## Conventions
 

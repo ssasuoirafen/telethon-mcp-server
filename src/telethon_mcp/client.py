@@ -6,7 +6,7 @@ import asyncio
 import functools
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from telethon import TelegramClient
@@ -156,7 +156,7 @@ class TelethonMcpClient:
 
     def _format_ts(self, dt: datetime) -> str:
         if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc)
+            dt = dt.astimezone(UTC)
         return dt.strftime("%Y-%m-%d %H:%M")
 
     def _sender_name(self, sender: User | None, sender_id: int | None) -> str:
@@ -230,7 +230,11 @@ class TelethonMcpClient:
             return f"[Forwarded from {fwd.from_name}]"
         if fwd.from_id:
             type_name = type(fwd.from_id).__name__
-            peer_id = getattr(fwd.from_id, "user_id", None) or getattr(fwd.from_id, "channel_id", None) or getattr(fwd.from_id, "chat_id", None)
+            peer_id = (
+                getattr(fwd.from_id, "user_id", None)
+                or getattr(fwd.from_id, "channel_id", None)
+                or getattr(fwd.from_id, "chat_id", None)
+            )
             if type_name == "PeerChannel":
                 return f"[Forwarded from channel:{peer_id}]"
             if type_name == "PeerUser":
